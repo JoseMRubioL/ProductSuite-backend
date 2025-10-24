@@ -5,27 +5,34 @@ import dotenv from "dotenv";
 import { initializeDatabase } from "./database.js";
 import authRoutes from "./routes/authRoutes.js";
 import pedidosRoutes from "./routes/pedidosRoutes.js";
-import incidenciasRoutes from "./routes/incidenciasRoutes.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-app.use(express.json());
-app.use("/api/incidencias", incidenciasRoutes);
+// 🧩 CORS configurado para frontend en Tropical Server
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "x-admin-key"]
+}));
 
-// Inicializa base de datos al arrancar
+app.use(express.json());
+
+// 📦 Inicializa la base de datos al arrancar
 initializeDatabase();
 
 // ✅ Rutas API
 app.use("/api/auth", authRoutes);
 app.use("/api/pedidos", pedidosRoutes);
 
-// Ruta raíz de prueba
-app.get("/", (req, res) => res.send("✅ API ProductSuite en ejecución"));
+// 🧪 Ruta raíz de prueba
+app.get("/", (req, res) => {
+  res.json({ message: "✅ API ProductSuite funcionando correctamente" });
+});
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
+// 🚀 Arranque del servidor
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Backend activo en puerto ${PORT}`);
 });
