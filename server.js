@@ -12,11 +12,14 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // 🧩 CORS configurado para frontend en Tropical Server
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "x-admin-key"]
-}));
+app.use(
+  cors({
+    origin: ["https://productsuitelaka.es"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"], // 👈 ESTA LÍNEA ES CLAVE
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
