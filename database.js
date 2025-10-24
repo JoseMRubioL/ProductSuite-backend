@@ -21,6 +21,7 @@ export async function initializeDatabase() {
       driver: sqlite3.Database,
     });
 
+    // === TABLA USUARIOS ===
     await dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +32,7 @@ export async function initializeDatabase() {
       );
     `);
 
+    // === TABLA PEDIDOS ===
     await dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS pedidos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +50,7 @@ export async function initializeDatabase() {
       );
     `);
 
+    // === TABLA INCIDENCIAS ===
     await dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS incidencias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,6 +67,17 @@ export async function initializeDatabase() {
       );
     `);
 
+    // ✅ === NUEVA TABLA STOCK ===
+    await dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS stock (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT NOT NULL,
+        descripcion TEXT,
+        cantidad INTEGER NOT NULL
+      );
+    `);
+
+    // === USUARIOS INICIALES (solo si no existen) ===
     const users = [
       ["admin", "admin123", "Administrador General", "admin"],
       ["tania", "tania123", "Tania", "worker"],
@@ -76,7 +90,10 @@ export async function initializeDatabase() {
     ];
 
     for (const [username, pass, fullname, role] of users) {
-      const existing = await dbInstance.get("SELECT id FROM users WHERE username = ?", [username]);
+      const existing = await dbInstance.get(
+        "SELECT id FROM users WHERE username = ?",
+        [username]
+      );
       if (!existing) {
         const hashed = await bcrypt.hash(pass, 10);
         await dbInstance.run(
