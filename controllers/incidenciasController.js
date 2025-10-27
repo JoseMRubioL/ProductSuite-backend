@@ -9,38 +9,44 @@ import { initializeDatabase } from "../database.js"; // para leer usuarios
  */
 export const getIncidencias = async (req, res) => {
   try {
-    const db = await getDB();
-    const user = req.user; // viene del token (authMiddleware)
-    let query;
-    let params = [];
+    const dbIncidencias = await initializeIncidenciasDB();
+    const dbUsuarios = await initializeDatabase();
+    const user = req.user;
 
+    // Obtener incidencias base
+    let incidencias = [];
     if (user.role === "admin" || user.username === "curro") {
-      // Admin o Curro → pueden ver todas
-      query = `
-        SELECT i.*, u.fullname AS assigned_name
-        FROM incidencias i
-        LEFT JOIN users u ON i.assigned_to = u.id
-        ORDER BY i.fecha_creacion DESC
-      `;
+      incidencias = await dbIncidencias.all(`
+        SELECT * FROM incidencias
+        ORDER BY fecha_creacion DESC
+      `);
     } else {
-      // Trabajador → solo sus incidencias
-      query = `
-        SELECT i.*, u.fullname AS assigned_name
-        FROM incidencias i
-        LEFT JOIN users u ON i.assigned_to = u.id
-        WHERE i.assigned_to = ?
-        ORDER BY i.fecha_creacion DESC
-      `;
-      params = [user.id];
+      incidencias = await dbIncidencias.all(
+        `SELECT * FROM incidencias WHERE assigned_to = ? ORDER BY fecha_creacion DESC`,
+        [user.id]
+      );
     }
 
-    const incidencias = await db.all(query, params);
+    // Añadir el nombre del asignado usando la tabla de usuarios
+    for (const inc of incidencias) {
+      if (inc.assigned_to) {
+        const usuario = await dbUsuarios.get(
+          "SELECT fullname FROM users WHERE id = ?",
+          [inc.assigned_to]
+        );
+        inc.assigned_name = usuario ? usuario.fullname : "Desconocido";
+      } else {
+        inc.assigned_name = "Sin asignar";
+      }
+    }
+
     res.json(incidencias);
   } catch (error) {
     console.error("❌ Error al obtener incidencias:", error);
     res.status(500).json({ error: "Error al obtener incidencias" });
   }
 };
+
 /**
  * Crear una incidencia
  */
