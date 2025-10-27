@@ -7,34 +7,40 @@ import { initializeDatabase } from "../database.js"; // para leer usuarios
  *  - admin y curro → todas
  *  - worker → solo las suyas
  */
-export async function getIncidencias(req, res) {
+export const getIncidencias = async (req, res) => {
   try {
-    const dbInc = await initializeIncidenciasDB();
-    const dbUsers = await initializeDatabase();
-    const user = req.user;
-
-    let query = "SELECT * FROM incidencias";
+    const db = await getDB();
+    const user = req.user; // viene del token (authMiddleware)
+    let query;
     let params = [];
 
-    if (user.role !== "admin" && user.username !== "curro") {
-      const worker = await dbUsers.get(
-        "SELECT id FROM users WHERE username = ?",
-        [user.username]
-      );
-      if (!worker) return res.status(404).json({ error: "Usuario no encontrado" });
-
-      query += " WHERE assigned_to = ?";
-      params.push(worker.id);
+    if (user.role === "admin" || user.username === "curro") {
+      // Admin o Curro → pueden ver todas
+      query = `
+        SELECT i.*, u.fullname AS assigned_name
+        FROM incidencias i
+        LEFT JOIN users u ON i.assigned_to = u.id
+        ORDER BY i.fecha_creacion DESC
+      `;
+    } else {
+      // Trabajador → solo sus incidencias
+      query = `
+        SELECT i.*, u.fullname AS assigned_name
+        FROM incidencias i
+        LEFT JOIN users u ON i.assigned_to = u.id
+        WHERE i.assigned_to = ?
+        ORDER BY i.fecha_creacion DESC
+      `;
+      params = [user.id];
     }
 
-    const incidencias = await dbInc.all(query, params);
+    const incidencias = await db.all(query, params);
     res.json(incidencias);
-  } catch (err) {
-    console.error("❌ Error al obtener incidencias:", err);
-    res.status(500).json({ error: "Error interno al obtener incidencias" });
+  } catch (error) {
+    console.error("❌ Error al obtener incidencias:", error);
+    res.status(500).json({ error: "Error al obtener incidencias" });
   }
-}
-
+};
 /**
  * Crear una incidencia
  */
