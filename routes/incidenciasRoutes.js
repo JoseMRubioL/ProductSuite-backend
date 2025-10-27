@@ -1,25 +1,21 @@
-// routes/incidenciasRoutes.js
 import express from "express";
 import {
-  getAllIncidencias,
+  getIncidencias,
   createIncidencia,
-  updateIncidenciaEstado,
-  updateIncidenciaContestacion
+  updateEstado,
+  updateContestacion,
+  deleteIncidencia,
+  getEstadisticas,
 } from "../controllers/incidenciasController.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// 📋 Obtener todas las incidencias (según rol)
-router.get("/", verifyToken, getAllIncidencias);
-
-// 🧾 Crear una nueva incidencia
+router.get("/", verifyToken, getIncidencias);
 router.post("/", verifyToken, createIncidencia);
-
-// 🔄 Actualizar estado de una incidencia
-router.patch("/:id/estado", verifyToken, updateIncidenciaEstado);
-
-// 💬 Añadir contestación a una incidencia
-router.patch("/:id/contestacion", verifyToken, updateIncidenciaContestacion);
+router.patch("/:id/estado", verifyToken, updateEstado);
+router.patch("/:id/contestacion", verifyToken, updateContestacion);
+router.delete("/:id", verifyToken, deleteIncidencia);
+router.get("/estadisticas", verifyToken, getEstadisticas);
 
 export default router;
