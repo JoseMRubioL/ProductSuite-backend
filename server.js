@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { initializeDatabase } from "./database.js";
 import authRoutes from "./routes/authRoutes.js";
 import pedidosRoutes from "./routes/pedidosRoutes.js";
+import incidenciasRoutes from "./routes/incidenciasRoutes.js";
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ initializeDatabase();
 // ✅ Rutas API
 app.use("/api/auth", authRoutes);
 app.use("/api/pedidos", pedidosRoutes);
+app.use("/api/incidencias", incidenciasRoutes);
 
 // 🧪 Ruta raíz de prueba
 app.get("/", (req, res) => {
