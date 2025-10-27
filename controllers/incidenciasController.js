@@ -1,143 +1,133 @@
 // controllers/incidenciasController.js
-import { initializeIncidenciasDB } from "../databaseIncidencias.js";
-import { initializeDatabase } from "../database.js"; // para leer usuarios
+import { initializeDatabase } from "../database.js";
 
 /**
- * Devuelve incidencias según rol:
- *  - admin y curro → todas
- *  - worker → solo las suyas
+ * 📋 Obtener todas las incidencias
+ * - Los admins o "curro" ven todas
+ * - Los trabajadores solo las asignadas a ellos
  */
-export async function getIncidencias(req, res) {
+export async function getAllIncidencias(req, res) {
   try {
-    const dbInc = await initializeIncidenciasDB();
-    const dbUsers = await initializeDatabase();
-    const user = req.user;
+    const db = await initializeDatabase();
+    const userId = req.user?.id;
+    const role = req.user?.role?.toLowerCase();
+    const username = req.user?.username?.toLowerCase();
 
-    let query = "SELECT * FROM incidencias";
-    let params = [];
+    let query = `
+      SELECT 
+        i.id,
+        i.titulo,
+        i.descripcion,
+        i.estado,
+        i.contestacion,
+        i.fecha_creacion,
+        i.fecha_actualizacion,
+        i.assigned_to,
+        i.created_by,
+        u1.fullname AS assigned_to_name,
+        u2.fullname AS created_by_name
+      FROM incidencias i
+      LEFT JOIN users u1 ON i.assigned_to = u1.id
+      LEFT JOIN users u2 ON i.created_by = u2.id
+    `;
 
-    if (user.role !== "admin" && user.username !== "curro") {
-      const worker = await dbUsers.get(
-        "SELECT id FROM users WHERE username = ?",
-        [user.username]
-      );
-      if (!worker) return res.status(404).json({ error: "Usuario no encontrado" });
-
-      query += " WHERE assigned_to = ?";
-      params.push(worker.id);
+    // 🔐 Si no es admin o Curro, filtrar por las asignadas a él
+    if (role !== "admin" && username !== "curro") {
+      query += " WHERE i.assigned_to = ?";
     }
 
-    const incidencias = await dbInc.all(query, params);
+    query += " ORDER BY i.fecha_creacion DESC";
+
+    const incidencias =
+      role === "admin" || username === "curro"
+        ? await db.all(query)
+        : await db.all(query, [userId]);
+
     res.json(incidencias);
-  } catch (err) {
-    console.error("❌ Error al obtener incidencias:", err);
-    res.status(500).json({ error: "Error interno al obtener incidencias" });
+  } catch (error) {
+    console.error("❌ Error al obtener incidencias:", error);
+    res.status(500).json({ error: "Error al obtener incidencias" });
   }
 }
 
 /**
- * Crear una incidencia
+ * 🧾 Crear una nueva incidencia
  */
 export async function createIncidencia(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
+    const db = await initializeDatabase();
     const { titulo, descripcion, assigned_to } = req.body;
+    const created_by = req.user?.id;
 
-    if (!titulo || !assigned_to) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    if (!titulo || !descripcion) {
+      return res.status(400).json({ error: "Título y descripción son obligatorios" });
     }
 
     await db.run(
-      `INSERT INTO incidencias (titulo, descripcion, assigned_to, estado)
-       VALUES (?, ?, ?, 'pendiente')`,
-      [titulo, descripcion, assigned_to]
+      `
+      INSERT INTO incidencias (titulo, descripcion, estado, assigned_to, created_by)
+      VALUES (?, ?, 'pendiente', ?, ?)
+    `,
+      [titulo, descripcion, assigned_to || null, created_by]
     );
 
-    res.json({ message: "✅ Incidencia creada correctamente" });
-  } catch (err) {
-    console.error("❌ Error al crear incidencia:", err);
+    res.status(201).json({ message: "✅ Incidencia creada correctamente" });
+  } catch (error) {
+    console.error("❌ Error al crear incidencia:", error);
     res.status(500).json({ error: "Error al crear incidencia" });
   }
 }
 
 /**
- * Actualizar estado
+ * ✏️ Actualizar el estado de una incidencia
  */
-export async function updateEstado(req, res) {
+export async function updateIncidenciaEstado(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
+    const db = await initializeDatabase();
     const { id } = req.params;
     const { estado } = req.body;
 
+    if (!estado) {
+      return res.status(400).json({ error: "El estado es obligatorio" });
+    }
+
     await db.run(
-      `UPDATE incidencias 
-       SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
+      `
+      UPDATE incidencias
+      SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
       [estado, id]
     );
 
-    res.json({ message: "✅ Estado actualizado" });
-  } catch (err) {
-    console.error("❌ Error al actualizar estado:", err);
-    res.status(500).json({ error: "Error al actualizar estado" });
+    res.json({ message: "✅ Estado de incidencia actualizado" });
+  } catch (error) {
+    console.error("❌ Error al actualizar estado de incidencia:", error);
+    res.status(500).json({ error: "Error al actualizar estado de incidencia" });
   }
 }
 
 /**
- * Actualizar contestación
+ * 💬 Añadir una contestación
  */
-export async function updateContestacion(req, res) {
+export async function updateIncidenciaContestacion(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
+    const db = await initializeDatabase();
     const { id } = req.params;
     const { contestacion } = req.body;
 
     await db.run(
-      `UPDATE incidencias 
-       SET contestacion = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
+      `
+      UPDATE incidencias
+      SET contestacion = ?, fecha_actualizacion = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
       [contestacion, id]
     );
 
-    res.json({ message: "✅ Contestación actualizada" });
-  } catch (err) {
-    console.error("❌ Error al actualizar contestación:", err);
-    res.status(500).json({ error: "Error al actualizar contestación" });
-  }
-}
-
-/**
- * Eliminar incidencia
- */
-export async function deleteIncidencia(req, res) {
-  try {
-    const db = await initializeIncidenciasDB();
-    const { id } = req.params;
-
-    await db.run("DELETE FROM incidencias WHERE id = ?", [id]);
-    res.json({ message: "🗑️ Incidencia eliminada" });
-  } catch (err) {
-    console.error("❌ Error al eliminar incidencia:", err);
-    res.status(500).json({ error: "Error al eliminar incidencia" });
-  }
-}
-
-/**
- * Estadísticas globales
- */
-export async function getEstadisticas(req, res) {
-  try {
-    const db = await initializeIncidenciasDB();
-
-    const data = await db.all(`
-      SELECT estado, COUNT(*) AS cantidad
-      FROM incidencias
-      GROUP BY estado
-    `);
-
-    res.json(data);
-  } catch (err) {
-    console.error("❌ Error al obtener estadísticas:", err);
-    res.status(500).json({ error: "Error interno al obtener estadísticas" });
+    res.json({ message: "✅ Contestación guardada" });
+  } catch (error) {
+    console.error("❌ Error al guardar contestación:", error);
+    res.status(500).json({ error: "Error al guardar contestación" });
   }
 }
