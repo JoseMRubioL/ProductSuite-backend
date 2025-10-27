@@ -1,6 +1,7 @@
 import { initializeDatabase } from "../database.js";
 import { buildPedidosExcelBuffer } from "../services/excelService.js";
 
+// 🔹 Obtener pedidos
 export async function getPedidos(req, res) {
   try {
     const db = await initializeDatabase();
@@ -12,6 +13,7 @@ export async function getPedidos(req, res) {
   }
 }
 
+// 🔹 Crear pedido
 export async function createPedido(req, res) {
   try {
     const { telefono, tipo_prenda, talla, color, codigo, precio, metodo_pago, notas, fecha_envio } = req.body;
@@ -20,7 +22,6 @@ export async function createPedido(req, res) {
       return res.status(400).json({ error: "Campos obligatorios incompletos" });
 
     const db = await initializeDatabase();
-
     await db.run(
       `INSERT INTO pedidos (telefono, tipo_prenda, talla, color, codigo, precio, metodo_pago, notas, fecha_envio)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -34,18 +35,16 @@ export async function createPedido(req, res) {
   }
 }
 
-// 🟢 Actualizar pedido
+// 🔹 Actualizar pedido
 export async function updatePedido(req, res) {
   try {
     const { id } = req.params;
     const { telefono, tipo_prenda, talla, color, codigo, precio, metodo_pago, notas, fecha_envio, estado } = req.body;
-
     const db = await initializeDatabase();
-
     await db.run(
       `UPDATE pedidos
-       SET telefono = ?, tipo_prenda = ?, talla = ?, color = ?, codigo = ?, precio = ?, metodo_pago = ?, notas = ?, fecha_envio = ?, estado = ?
-       WHERE id = ?`,
+       SET telefono=?, tipo_prenda=?, talla=?, color=?, codigo=?, precio=?, metodo_pago=?, notas=?, fecha_envio=?, estado=?
+       WHERE id=?`,
       [telefono, tipo_prenda, talla, color, codigo, precio, metodo_pago, notas, fecha_envio, estado, id]
     );
 
@@ -56,13 +55,12 @@ export async function updatePedido(req, res) {
   }
 }
 
-// 🗑️ Eliminar un pedido
+// 🔹 Eliminar pedido
 export async function deletePedido(req, res) {
   try {
     const { id } = req.params;
     const db = await initializeDatabase();
-
-    await db.run("DELETE FROM pedidos WHERE id = ?", [id]);
+    await db.run("DELETE FROM pedidos WHERE id=?", [id]);
     res.json({ message: "Pedido eliminado correctamente" });
   } catch (err) {
     console.error("❌ Error al eliminar pedido:", err);
@@ -70,7 +68,7 @@ export async function deletePedido(req, res) {
   }
 }
 
-// 🧹 Eliminar todos los pedidos
+// 🔹 Eliminar todos los pedidos
 export async function deleteAllPedidos(req, res) {
   try {
     const db = await initializeDatabase();
@@ -82,37 +80,18 @@ export async function deleteAllPedidos(req, res) {
   }
 }
 
-export async function updatePedidoEstado(req, res) {
-  try {
-    const { id } = req.params;
-    const { estado } = req.body;
-
-    if (!["activo", "anulado"].includes(estado)) {
-      return res.status(400).json({ error: "Estado no válido" });
-    }
-
-    const db = await initializeDatabase();
-    const result = await db.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
-
-    if (result.changes === 0) return res.status(404).json({ error: "Pedido no encontrado" });
-
-    res.json({ message: "Estado actualizado correctamente" });
-  } catch (err) {
-    console.error("❌ Error al actualizar estado:", err);
-    res.status(500).json({ error: "Error interno al actualizar estado" });
-  }
-}
-
+// 🔹 Exportar pedidos a Excel
 export async function exportPedidosExcel(req, res) {
   try {
     const db = await initializeDatabase();
     const pedidos = await db.all("SELECT * FROM pedidos ORDER BY telefono ASC, fecha ASC");
     const buffer = await buildPedidosExcelBuffer(pedidos);
+
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="pedidos.xlsx"');
     res.send(Buffer.from(buffer));
   } catch (err) {
-    console.error("❌ Error al exportar Excel:", err);
-    res.status(500).json({ error: "Error al exportar pedidos" });
+    console.error("❌ Error al exportar pedidos:", err);
+    res.status(500).json({ error: "Error al exportar pedidos a Excel" });
   }
 }
