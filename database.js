@@ -1,30 +1,32 @@
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-import path from "path";
-import fs from "fs";
+// backend/database.js
+import pkg from "pg";
+const { Pool } = pkg;
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const dataDir = process.env.DATA_DIR || "./data";
-const dbPath = path.join(dataDir, "pedidos.db");
+const connectionString = process.env.DATABASE_URL;
 
-let dbInstance = null;
+if (!connectionString) {
+  console.error("❌ ERROR: No se encontró DATABASE_URL en .env");
+  process.exit(1);
+}
+
+// Crear el pool de conexión
+export const pool = new Pool({
+  connectionString,
+  ssl: {
+    rejectUnauthorized: false, // necesario para Render
+  },
+});
 
 export async function initializeDatabase() {
-  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
-  if (!dbInstance) {
-    dbInstance = await open({
-      filename: dbPath,
-      driver: sqlite3.Database,
-    });
-
-    // === TABLA USUARIOS ===
-    await dbInstance.exec(`
+  try {
+    // 🧱 Crear tablas
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         fullname TEXT NOT NULL,
@@ -32,10 +34,9 @@ export async function initializeDatabase() {
       );
     `);
 
-    // === TABLA PEDIDOS ===
-    await dbInstance.exec(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS pedidos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         telefono TEXT NOT NULL,
         tipo_prenda TEXT NOT NULL,
         talla TEXT NOT NULL,
@@ -46,38 +47,25 @@ export async function initializeDatabase() {
         estado TEXT DEFAULT 'activo',
         notas TEXT,
         fecha_envio TEXT,
-        fecha TEXT DEFAULT CURRENT_TIMESTAMP
+        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // === TABLA INCIDENCIAS ===
-    await dbInstance.exec(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS incidencias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         titulo TEXT NOT NULL,
         descripcion TEXT,
         estado TEXT DEFAULT 'pendiente',
         contestacion TEXT,
-        assigned_to INTEGER,
-        created_by INTEGER,
-        fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-        fecha_actualizacion TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (assigned_to) REFERENCES users(id),
-        FOREIGN KEY (created_by) REFERENCES users(id)
+        assigned_to INTEGER REFERENCES users(id),
+        created_by INTEGER REFERENCES users(id),
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // ✅ === NUEVA TABLA STOCK ===
-    await dbInstance.exec(`
-      CREATE TABLE IF NOT EXISTS stock (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        codigo TEXT NOT NULL,
-        descripcion TEXT,
-        cantidad INTEGER NOT NULL
-      );
-    `);
-
-    // === USUARIOS INICIALES (solo si no existen) ===
+    // 👥 Insertar usuarios iniciales si no existen
     const users = [
       ["admin", "admin123", "Administrador General", "admin"],
       ["tania", "tania123", "Tania", "worker"],
@@ -90,21 +78,24 @@ export async function initializeDatabase() {
     ];
 
     for (const [username, pass, fullname, role] of users) {
-      const existing = await dbInstance.get(
-        "SELECT id FROM users WHERE username = ?",
+      const existing = await pool.query(
+        "SELECT id FROM users WHERE username = $1",
         [username]
       );
-      if (!existing) {
+
+      if (existing.rows.length === 0) {
         const hashed = await bcrypt.hash(pass, 10);
-        await dbInstance.run(
-          "INSERT INTO users (username, password, fullname, role) VALUES (?, ?, ?, ?)",
+        await pool.query(
+          "INSERT INTO users (username, password, fullname, role) VALUES ($1, $2, $3, $4)",
           [username, hashed, fullname, role]
         );
       }
     }
 
-    console.log("✅ Base de datos inicializada en:", dbPath);
-  }
+    console.log("✅ PostgreSQL inicializado correctamente en Render");
 
-  return dbInstance;
+  } catch (err) {
+    console.error("❌ Error al inicializar la base de datos:", err);
+    process.exit(1);
+  }
 }
