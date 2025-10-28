@@ -1,6 +1,4 @@
-// controllers/incidenciasController.js
-import { initializeIncidenciasDB } from "../databaseIncidencias.js";
-import { initializeDatabase } from "../database.js"; // para leer usuarios
+import { pool } from "../database.js";
 
 /**
  * Devuelve incidencias según rol:
@@ -9,32 +7,25 @@ import { initializeDatabase } from "../database.js"; // para leer usuarios
  */
 export const getIncidencias = async (req, res) => {
   try {
-    const dbIncidencias = await initializeIncidenciasDB();
-    const dbUsuarios = await initializeDatabase();
     const user = req.user;
+    let incidencias;
 
-    // Obtener incidencias base
-    let incidencias = [];
     if (user.role === "admin" || user.username === "curro") {
-      incidencias = await dbIncidencias.all(`
-        SELECT * FROM incidencias
-        ORDER BY fecha_creacion DESC
-      `);
+      const result = await pool.query(`SELECT * FROM incidencias ORDER BY fecha_creacion DESC`);
+      incidencias = result.rows;
     } else {
-      incidencias = await dbIncidencias.all(
-        `SELECT * FROM incidencias WHERE assigned_to = ? ORDER BY fecha_creacion DESC`,
+      const result = await pool.query(
+        `SELECT * FROM incidencias WHERE assigned_to = $1 ORDER BY fecha_creacion DESC`,
         [user.id]
       );
+      incidencias = result.rows;
     }
 
-    // Añadir el nombre del asignado usando la tabla de usuarios
+    // Añadir nombre del asignado
     for (const inc of incidencias) {
       if (inc.assigned_to) {
-        const usuario = await dbUsuarios.get(
-          "SELECT fullname FROM users WHERE id = ?",
-          [inc.assigned_to]
-        );
-        inc.assigned_name = usuario ? usuario.fullname : "Desconocido";
+        const userResult = await pool.query("SELECT fullname FROM users WHERE id = $1", [inc.assigned_to]);
+        inc.assigned_name = userResult.rows[0]?.fullname || "Desconocido";
       } else {
         inc.assigned_name = "Sin asignar";
       }
@@ -52,16 +43,15 @@ export const getIncidencias = async (req, res) => {
  */
 export async function createIncidencia(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
     const { titulo, descripcion, assigned_to } = req.body;
 
     if (!titulo || !assigned_to) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    await db.run(
+    await pool.query(
       `INSERT INTO incidencias (titulo, descripcion, assigned_to, estado)
-       VALUES (?, ?, ?, 'pendiente')`,
+       VALUES ($1, $2, $3, 'pendiente')`,
       [titulo, descripcion, assigned_to]
     );
 
@@ -77,14 +67,13 @@ export async function createIncidencia(req, res) {
  */
 export async function updateEstado(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
     const { id } = req.params;
     const { estado } = req.body;
 
-    await db.run(
-      `UPDATE incidencias 
-       SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
+    await pool.query(
+      `UPDATE incidencias
+       SET estado=$1, fecha_actualizacion=CURRENT_TIMESTAMP
+       WHERE id=$2`,
       [estado, id]
     );
 
@@ -100,14 +89,13 @@ export async function updateEstado(req, res) {
  */
 export async function updateContestacion(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
     const { id } = req.params;
     const { contestacion } = req.body;
 
-    await db.run(
-      `UPDATE incidencias 
-       SET contestacion = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
+    await pool.query(
+      `UPDATE incidencias
+       SET contestacion=$1, fecha_actualizacion=CURRENT_TIMESTAMP
+       WHERE id=$2`,
       [contestacion, id]
     );
 
@@ -123,10 +111,8 @@ export async function updateContestacion(req, res) {
  */
 export async function deleteIncidencia(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
     const { id } = req.params;
-
-    await db.run("DELETE FROM incidencias WHERE id = ?", [id]);
+    await pool.query("DELETE FROM incidencias WHERE id=$1", [id]);
     res.json({ message: "🗑️ Incidencia eliminada" });
   } catch (err) {
     console.error("❌ Error al eliminar incidencia:", err);
@@ -139,15 +125,12 @@ export async function deleteIncidencia(req, res) {
  */
 export async function getEstadisticas(req, res) {
   try {
-    const db = await initializeIncidenciasDB();
-
-    const data = await db.all(`
+    const result = await pool.query(`
       SELECT estado, COUNT(*) AS cantidad
       FROM incidencias
       GROUP BY estado
     `);
-
-    res.json(data);
+    res.json(result.rows);
   } catch (err) {
     console.error("❌ Error al obtener estadísticas:", err);
     res.status(500).json({ error: "Error interno al obtener estadísticas" });
