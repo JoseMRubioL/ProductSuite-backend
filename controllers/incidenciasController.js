@@ -130,6 +130,12 @@ export async function getEstadisticas(req, res) {
       FROM incidencias
       GROUP BY estado
     `);
+    //🔧 Convertir datos a formato numérico y compatible con el frontend
+    const stats = result.rows.map(row => ({
+      estado: row.estado,
+      cantidad: Number(row.cantidad),
+    }));
+
     res.json(result.rows);
   } catch (err) {
     console.error("❌ Error al obtener estadísticas:", err);
